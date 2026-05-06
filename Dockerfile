@@ -47,14 +47,15 @@ FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl \
-    libpq5 libpqxx-7 \
+    libpq5 libpqxx-7t64 \
     libjsoncpp26 \
     libpaho-mqtt1.3 libpaho-mqttpp3-1 \
     libspdlog1.15 libfmt10 \
     libsqlite3-0 \
-    libdrogon1t64 libtrantor1 \
-    libyaml-cpp0.8 \
-    libvmime1 \
+    libdrogon1t64 libtrantor1t64 \
+    libyaml-cpp0.8t64 \
+    libvmime1t64 \
+    libmariadb3 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -r -u 1000 -m -s /bin/bash gmail
