@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-dev libdrogon-dev \
     uuid-dev libhiredis-dev libbrotli-dev \
     libyaml-cpp-dev zlib1g-dev libfmt-dev \
-    libvmime-dev \
+    libvmime-dev libmariadb-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
