@@ -1,0 +1,21 @@
+[Unit]
+Description=HMS Gmail — backup, search, and inbox management service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=aamat
+WorkingDirectory=/var/lib/hms-gmail
+ExecStart=/usr/local/bin/hms_gmail --config /etc/hms-gmail/config.yaml
+Restart=on-failure
+RestartSec=10
+
+# Environment overrides (see AppConfig for all keys)
+# Environment=HMS_GMAIL_PORT=8890
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hms-gmail
+
+[Install]
+WantedBy=multi-user.target
