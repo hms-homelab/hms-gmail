@@ -63,7 +63,7 @@ RUN useradd -r -u 1000 -m -s /bin/bash gmail
 COPY --from=builder /build/build/hms_gmail /usr/local/bin/hms_gmail
 RUN chmod +x /usr/local/bin/hms_gmail
 
-COPY --from=ui-builder /ui/dist/frontend/browser/ /home/gmail/static/browser/
+COPY --from=ui-builder /ui/dist/browser/ /home/gmail/static/browser/
 
 RUN mkdir -p /data/gmail /etc/hms-gmail /var/lib/hms-gmail && \
     chown -R gmail:gmail /data /var/lib/hms-gmail /home/gmail/static
