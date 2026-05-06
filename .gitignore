@@ -1,0 +1,20 @@
+build/
+.vscode/
+.idea/
+*.o
+*.a
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Config with real credentials
+config.yaml
+config.json
+oauth.json
+*.cfg
+
+# Secrets
+.env
+.secrets

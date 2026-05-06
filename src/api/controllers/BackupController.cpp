@@ -1,0 +1,65 @@
+#include "BackupController.h"
+#include <json/json.h>
+
+BackupManager* BackupController::backup_ = nullptr;
+
+static drogon::HttpResponsePtr makeJsonResponse(const Json::Value& body,
+                                                 drogon::HttpStatusCode code = drogon::k200OK) {
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "";
+    auto resp = drogon::HttpResponse::newHttpResponse();
+    resp->setStatusCode(code);
+    resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+    resp->setBody(Json::writeString(builder, body));
+    return resp;
+}
+
+static std::string stateStr(BackupState s) {
+    switch (s) {
+        case BackupState::IDLE:            return "idle";
+        case BackupState::BACKUP_RUNNING:  return "backup_running";
+        case BackupState::PURGE_RUNNING:   return "purge_running";
+        case BackupState::INDEXING:        return "indexing";
+        case BackupState::EMBEDDING:       return "embedding";
+        case BackupState::ERROR:           return "error";
+    }
+    return "unknown";
+}
+
+void BackupController::getStatus(const drogon::HttpRequestPtr&,
+                                  std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+    if (!backup_) { cb(makeJsonResponse(Json::Value("not initialized"), drogon::k503ServiceUnavailable)); return; }
+
+    auto s = backup_->status();
+    Json::Value body;
+    body["state"]      = stateStr(s.state);
+    body["downloaded"] = s.downloaded;
+    body["total"]      = s.total;
+    body["purged"]     = s.purged;
+    body["last_run"]   = s.last_run;
+    body["next_run"]   = s.next_run;
+    if (!s.last_error.empty()) body["last_error"] = s.last_error;
+    cb(makeJsonResponse(body));
+}
+
+void BackupController::postStart(const drogon::HttpRequestPtr&,
+                                  std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+    if (!backup_) { cb(makeJsonResponse(Json::Value("not initialized"), drogon::k503ServiceUnavailable)); return; }
+
+    if (backup_->start()) {
+        Json::Value body; body["started"] = true;
+        cb(makeJsonResponse(body));
+    } else {
+        Json::Value body; body["error"] = "already running";
+        cb(makeJsonResponse(body, drogon::k409Conflict));
+    }
+}
+
+void BackupController::postStop(const drogon::HttpRequestPtr&,
+                                 std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+    if (!backup_) { cb(makeJsonResponse(Json::Value("not initialized"), drogon::k503ServiceUnavailable)); return; }
+
+    backup_->stop();
+    Json::Value body; body["stopped"] = true;
+    cb(makeJsonResponse(body));
+}

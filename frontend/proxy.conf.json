@@ -1,0 +1,7 @@
+{
+  "/search":   { "target": "http://localhost:8896", "secure": false },
+  "/emails":   { "target": "http://localhost:8896", "secure": false },
+  "/threads":  { "target": "http://localhost:8896", "secure": false },
+  "/backup":   { "target": "http://localhost:8896", "secure": false },
+  "/health":   { "target": "http://localhost:8896", "secure": false }
+}
