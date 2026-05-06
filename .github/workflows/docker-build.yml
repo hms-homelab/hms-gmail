@@ -53,7 +53,7 @@ jobs:
             libsqlite3-dev libdrogon-dev \
             uuid-dev libhiredis-dev libbrotli-dev \
             libyaml-cpp-dev zlib1g-dev libfmt-dev \
-            libvmime-dev \
+            libvmime-dev libmariadb-dev \
             libgtest-dev libgmock-dev
 
       - name: Build HMS-Gmail
