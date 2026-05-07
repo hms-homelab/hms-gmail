@@ -1,18 +1,33 @@
 {
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
-  "cli": { "packageManager": "npm" },
+  "cli": {
+    "packageManager": "npm"
+  },
   "newProjectRoot": "projects",
   "projects": {
     "hms-gmail-frontend": {
       "projectType": "application",
       "schematics": {
-        "@schematics/angular:component": { "style": "scss", "skipTests": true },
-        "@schematics/angular:class": { "skipTests": true },
-        "@schematics/angular:directive": { "skipTests": true },
-        "@schematics/angular:guard": { "skipTests": true },
-        "@schematics/angular:pipe": { "skipTests": true },
-        "@schematics/angular:service": { "skipTests": true }
+        "@schematics/angular:component": {
+          "style": "scss",
+          "skipTests": true
+        },
+        "@schematics/angular:class": {
+          "skipTests": true
+        },
+        "@schematics/angular:directive": {
+          "skipTests": true
+        },
+        "@schematics/angular:guard": {
+          "skipTests": true
+        },
+        "@schematics/angular:pipe": {
+          "skipTests": true
+        },
+        "@schematics/angular:service": {
+          "skipTests": true
+        }
       },
       "root": "",
       "sourceRoot": "src",
@@ -25,17 +40,29 @@
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
-            "assets": [{ "glob": "**/*", "input": "public" }],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              }
+            ],
             "styles": [
-              "@angular/material/prebuilt-themes/deeppurple-amber.css",
               "src/styles.scss"
             ]
           },
           "configurations": {
             "production": {
               "budgets": [
-                { "type": "initial", "maximumWarning": "500kB", "maximumError": "1MB" },
-                { "type": "anyComponentStyle", "maximumWarning": "4kB", "maximumError": "8kB" }
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
               ],
               "outputHashing": "all"
             },
@@ -50,8 +77,12 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {
-            "production": { "buildTarget": "hms-gmail-frontend:build:production" },
-            "development": { "buildTarget": "hms-gmail-frontend:build:development" }
+            "production": {
+              "buildTarget": "hms-gmail-frontend:build:production"
+            },
+            "development": {
+              "buildTarget": "hms-gmail-frontend:build:development"
+            }
           },
           "defaultConfiguration": "development"
         }

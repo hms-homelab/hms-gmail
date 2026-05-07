@@ -29,8 +29,9 @@ public:
     SyncStats run(const ProgressCb& progress_cb = nullptr);
 
     // Trash messages older than cfg.purge_older_than_days.
+    // If only_embedded=true, only trashes messages that are already embedded in the DB.
     // Returns count of trashed messages.
-    int purge(const ProgressCb& progress_cb = nullptr);
+    int purge(const ProgressCb& progress_cb = nullptr, bool only_embedded = false);
 
 private:
     SyncStats runFull(GmailClient& gmail, pqxx::connection& pg,

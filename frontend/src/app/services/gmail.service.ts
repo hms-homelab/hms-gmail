@@ -12,26 +12,26 @@ export class GmailService {
       .set('q', query)
       .set('limit', limit)
       .set('mode', mode);
-    return this.http.get<SearchResponse>('/search', { params });
+    return this.http.get<SearchResponse>('/api/search', { params });
   }
 
   getEmail(id: number): Observable<EmailDetail> {
-    return this.http.get<EmailDetail>(`/emails/${id}`);
+    return this.http.get<EmailDetail>(`/api/emails/${id}`);
   }
 
   getThread(tid: string): Observable<ThreadResponse> {
-    return this.http.get<ThreadResponse>(`/threads/${tid}`);
+    return this.http.get<ThreadResponse>(`/api/threads/${tid}`);
   }
 
   getBackupStatus(): Observable<BackupStatus> {
-    return this.http.get<BackupStatus>('/backup/status');
+    return this.http.get<BackupStatus>('/api/backup/status');
   }
 
-  startBackup(): Observable<unknown> {
-    return this.http.post('/backup/start', {});
+  startBackup(opts: Record<string, unknown> = {}): Observable<unknown> {
+    return this.http.post('/api/backup/start', opts);
   }
 
   stopBackup(): Observable<unknown> {
-    return this.http.post('/backup/stop', {});
+    return this.http.post('/api/backup/stop', {});
   }
 }

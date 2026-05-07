@@ -1,3 +1,17 @@
+@use '@angular/material' as mat;
+
+// Dark M3 theme with violet/purple primary
+:root {
+  @include mat.theme((
+    color: (
+      theme-type: dark,
+      primary: mat.$violet-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+}
+
 html, body {
   height: 100%;
   margin: 0;

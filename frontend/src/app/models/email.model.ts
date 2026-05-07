@@ -37,8 +37,18 @@ export interface ThreadResponse {
 export interface BackupStatus {
   state: string;
   downloaded: number;
+  skipped: number;
+  fetched: number;
   total: number;
   purged: number;
+  current_batch: number;
+  total_batches: number;
+  embed_done: number;
+  embed_errors: number;
+  embed_total: number;
+  db_total: number;
+  db_embedded: number;
+  db_failed: number;
   last_error: string;
   last_run: string;
   next_run: string;

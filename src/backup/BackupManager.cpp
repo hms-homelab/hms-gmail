@@ -3,6 +3,7 @@
 #include "embedding/EmbeddingWorker.h"
 #include <drogon/drogon.h>
 #include <json/json.h>
+#include <pqxx/pqxx>
 #include <sstream>
 #include <thread>
 #include <chrono>
@@ -19,7 +20,7 @@ static std::string nowIso() {
 BackupManager::BackupManager(const AppConfig& cfg, MqttPublisher publisher)
     : cfg_(cfg), publish_(std::move(publisher)) {}
 
-bool BackupManager::start() {
+bool BackupManager::start(BackupRunOptions opts) {
     std::lock_guard<std::mutex> lock(mu_);
     if (status_.state != BackupState::IDLE && status_.state != BackupState::ERROR)
         return false;
@@ -27,7 +28,7 @@ bool BackupManager::start() {
     status_.state     = BackupState::BACKUP_RUNNING;
     status_.last_run  = nowIso();
 
-    std::thread([this]{ runBackup(); }).detach();
+    std::thread([this, opts]{ runBackup(opts); }).detach();
     return true;
 }
 
@@ -43,17 +44,62 @@ void BackupManager::stop() {
 
 BackupStatus BackupManager::status() const {
     std::lock_guard<std::mutex> lock(mu_);
-    return status_;
+    BackupStatus s = status_;
+    // Live DB counts — fast COUNT query on indexed columns
+    try {
+        pqxx::connection pg(cfg_.db.connString());
+        pqxx::work txn(pg);
+        auto r = txn.exec(
+            "SELECT COUNT(*) AS total,"
+            "       COUNT(*) FILTER (WHERE embed_status='done') AS embedded,"
+            "       COUNT(*) FILTER (WHERE embed_status='failed') AS failed"
+            " FROM emails");
+        txn.commit();
+        s.db_total    = r[0][0].as<int>();
+        s.db_embedded = r[0][1].as<int>();
+        s.db_failed   = r[0][2].as<int>();
+    } catch (...) {}
+    return s;
 }
 
-void BackupManager::runBackup() {
+void BackupManager::runBackup(BackupRunOptions opts) {
     publish_("gmail/backup/started", "{\"email\":\"" + cfg_.email + "\"}");
 
+    // Build effective config for this run
+    AppConfig run_cfg = cfg_;
+
+    // Compose sync query: start from manual override or config default
+    std::string q = opts.sync_query.empty() ? cfg_.gmail_sync_query : opts.sync_query;
+
+    // Append date range modifiers (Gmail format: after:YYYY/M/D before:YYYY/M/D)
+    auto toGmailDate = [](const std::string& iso) -> std::string {
+        // "2024-01-15" → "2024/1/15"
+        if (iso.size() < 10) return "";
+        std::string d = iso.substr(0, 10);
+        for (char& c : d) if (c == '-') c = '/';
+        return d;
+    };
+    if (!opts.after_date.empty()) {
+        auto gd = toGmailDate(opts.after_date);
+        if (!gd.empty()) { if (!q.empty()) q += ' '; q += "after:" + gd; }
+    }
+    if (!opts.before_date.empty()) {
+        auto gd = toGmailDate(opts.before_date);
+        if (!gd.empty()) { if (!q.empty()) q += ' '; q += "before:" + gd; }
+    }
+    run_cfg.gmail_sync_query = q;
+    run_cfg.max_messages     = opts.max_messages;
+
     // --- Sync (full or incremental via Gmail API) ---
-    SyncManager syncer(cfg_);
+    SyncManager syncer(run_cfg);
     SyncStats sync_stats;
 
-    try {
+    if (opts.skip_sync) {
+        std::lock_guard<std::mutex> lock(mu_);
+        status_.state = BackupState::PURGE_RUNNING; // skip straight to purge/embed
+    }
+
+    if (!opts.skip_sync) try {
         sync_stats = syncer.run([this](const std::string& phase, int done, int total) {
             Json::Value p;
             p["phase"] = phase;
@@ -66,6 +112,10 @@ void BackupManager::runBackup() {
                 std::lock_guard<std::mutex> lock(mu_);
                 status_.downloaded = done;
                 status_.total      = total;
+            } else if (phase == "batch") {
+                std::lock_guard<std::mutex> lock(mu_);
+                status_.current_batch = done;
+                status_.total_batches = total;
             }
         });
     } catch (const std::exception& e) {
@@ -74,27 +124,33 @@ void BackupManager::runBackup() {
         status_.last_error = e.what();
         publish_("gmail/backup/error", "{\"message\":\"" + std::string(e.what()) + "\"}");
         return;
-    }
+    }  // end if (!opts.skip_sync)
 
     {
         std::lock_guard<std::mutex> lock(mu_);
-        status_.downloaded = sync_stats.indexed;
-        status_.state      = BackupState::PURGE_RUNNING;
+        if (!opts.skip_sync) {
+            status_.downloaded = sync_stats.indexed;
+            status_.skipped    = sync_stats.skipped;
+            status_.fetched    = sync_stats.fetched;
+        }
+        status_.state = BackupState::PURGE_RUNNING;
     }
 
     // --- Purge old messages ---
     int purged = 0;
-    try {
-        purged = syncer.purge([this](const std::string& phase, int done, int total) {
-            Json::Value p;
-            p["phase"] = phase;
-            p["done"]  = done;
-            p["total"] = total;
-            Json::StreamWriterBuilder wb; wb["indentation"] = "";
-            publish_("gmail/purge/progress", Json::writeString(wb, p));
-        });
-    } catch (const std::exception& e) {
-        std::cerr << "[BackupManager] purge error: " << e.what() << "\n";
+    if (opts.run_purge) {
+        try {
+            purged = syncer.purge([this](const std::string& phase, int done, int total) {
+                Json::Value p;
+                p["phase"] = phase;
+                p["done"]  = done;
+                p["total"] = total;
+                Json::StreamWriterBuilder wb; wb["indentation"] = "";
+                publish_("gmail/purge/progress", Json::writeString(wb, p));
+            }, opts.purge_only_embedded);
+        } catch (const std::exception& e) {
+            std::cerr << "[BackupManager] purge error: " << e.what() << "\n";
+        }
     }
 
     {
@@ -106,19 +162,34 @@ void BackupManager::runBackup() {
         "{\"purged\":" + std::to_string(purged) + "}");
 
     // --- Embed unembedded emails ---
-    {
-        std::lock_guard<std::mutex> lock(mu_);
-        status_.state = BackupState::EMBEDDING;
-    }
+    EmbedStats embed_stats;
+    if (opts.run_embedding) {
+        {
+            std::lock_guard<std::mutex> lock(mu_);
+            status_.state = BackupState::EMBEDDING;
+        }
 
-    EmbeddingWorker embedder(cfg_);
-    auto embed_stats = embedder.run([this](int done, int total) {
-        Json::Value p;
-        p["done"]  = done;
-        p["total"] = total;
-        Json::StreamWriterBuilder wb; wb["indentation"] = "";
-        publish_("gmail/embed/progress", Json::writeString(wb, p));
-    });
+        EmbeddingWorker embedder(run_cfg);
+        embed_stats = embedder.run(
+        [this](int done, int errors, int total) {
+            {
+                std::lock_guard<std::mutex> lock(mu_);
+                status_.embed_done   = done;
+                status_.embed_errors = errors;
+                status_.embed_total  = total;
+            }
+            Json::Value p;
+            p["done"]   = done;
+            p["errors"] = errors;
+            p["total"]  = total;
+            Json::StreamWriterBuilder wb; wb["indentation"] = "";
+            publish_("gmail/embed/progress", Json::writeString(wb, p));
+        },
+        [this]() {
+            std::lock_guard<std::mutex> lock(mu_);
+            return status_.state == BackupState::ERROR;
+        });
+    }
 
     {
         std::lock_guard<std::mutex> lock(mu_);

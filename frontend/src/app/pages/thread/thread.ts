@@ -54,7 +54,7 @@ import { SearchResult } from '../../models/email.model';
     .te-date { font-size: 12px; color: #888; }
     .te-snippet { font-size: 13px; color: #999; }
     .attach-icon { font-size: 16px; color: #888; margin-top: 4px; }
-    .empty-msg { text-align: center; color: #666; padding: 40px; }
+    .empty-msg { text-align: center; color: #aaa; padding: 40px; }
   `]
 })
 export class ThreadPage implements OnInit {

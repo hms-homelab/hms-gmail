@@ -26,13 +26,16 @@ struct AppConfig {
     std::string email                 = "";
     int         purge_older_than_days = 30;
     std::string schedule_cron         = "0 3 * * 0";
-    int         embedding_batch_size  = 20;
+    int         embedding_batch_size   = 20;
+    int         embedding_concurrency  = 1;
+    int         embedding_max_attempts = 10;
     std::string ollama_host           = "http://localhost:11434";
 
     // v1.5: direct Gmail API (replaces gyb)
     std::string gmail_oauth_file      = "/etc/hms-gmail/oauth.json";
     std::string gmail_sync_query      = "";   // empty = all mail
     int         gmail_batch_size      = 100;  // messages per batch API call (max 100)
+    int         max_messages          = 0;    // 0 = unlimited; set per-run via BackupRunOptions
 
     // legacy gyb fields (no longer used in v1.5 — kept for backward compat)
     std::string gyb_path              = "/opt/gyb/gyb";

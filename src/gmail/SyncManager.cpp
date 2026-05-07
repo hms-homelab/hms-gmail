@@ -88,6 +88,8 @@ SyncStats SyncManager::runFull(GmailClient& gmail, pqxx::connection& pg,
     // 1. Fetch all message IDs
     auto all_ids = gmail.listMessageIds(cfg_.gmail_sync_query,
         [&](int n) { if (cb) cb("list_ids", n, 0); });
+    if (cfg_.max_messages > 0 && static_cast<int>(all_ids.size()) > cfg_.max_messages)
+        all_ids.resize(cfg_.max_messages);
     stats.fetched = static_cast<int>(all_ids.size());
     std::cerr << "[SyncManager] full sync: " << stats.fetched << " IDs from Gmail\n";
 
@@ -177,14 +179,18 @@ SyncStats SyncManager::processBatches(GmailClient& gmail, pqxx::connection& pg,
     SyncStats stats;
     Indexer indexer(cfg_);
 
-    int total_done = 0;
-    int total_msgs = 0;
+    int total_done    = 0;
+    int total_msgs    = 0;
+    int total_batches = 0;
+    int batch_num     = 0;
     {
         pqxx::work txn(pg);
         auto r = txn.exec("SELECT count(*) FROM sync_batches WHERE status='pending'");
-        total_msgs = r[0][0].as<int>() * cfg_.gmail_batch_size;
+        total_batches = r[0][0].as<int>();
+        total_msgs    = total_batches * cfg_.gmail_batch_size;
         txn.commit();
     }
+    if (cb) cb("batch", 0, total_batches);
 
     while (true) {
         // Grab next pending batch
@@ -248,9 +254,10 @@ SyncStats SyncManager::processBatches(GmailClient& gmail, pqxx::connection& pg,
             }
 
             // Insert into PG
+            int batch_offset = total_done;
             auto idx_stats = indexer.insertGmailBatch(parsed_emails,
                 [&](int done, int /*total*/) {
-                    total_done = done;
+                    total_done = batch_offset + done;
                     if (cb) cb("sync", total_done, total_msgs);
                 });
 
@@ -259,12 +266,15 @@ SyncStats SyncManager::processBatches(GmailClient& gmail, pqxx::connection& pg,
             stats.errors  += idx_stats.errors;
 
             // Mark batch complete
-            pqxx::work txn(pg);
-            txn.exec_params(
-                "UPDATE sync_batches SET status='complete', completed_at=now(), "
-                "indexed_count=$2, error_count=$3 WHERE id=$1",
-                batch_id, idx_stats.indexed, idx_stats.errors);
-            txn.commit();
+            {
+                pqxx::work txn(pg);
+                txn.exec_params(
+                    "UPDATE sync_batches SET status='complete', completed_at=now(), "
+                    "indexed_count=$2, error_count=$3 WHERE id=$1",
+                    batch_id, idx_stats.indexed, idx_stats.errors);
+                txn.commit();
+            }
+            if (cb) cb("batch", ++batch_num, total_batches);
 
         } catch (const std::exception& e) {
             std::cerr << "[SyncManager] batch " << batch_id << " failed: " << e.what() << "\n";
@@ -361,7 +371,7 @@ SyncStats SyncManager::runIncremental(GmailClient& gmail, pqxx::connection& pg,
     return stats;
 }
 
-int SyncManager::purge(const ProgressCb& cb) {
+int SyncManager::purge(const ProgressCb& cb, bool only_embedded) {
     if (cfg_.purge_older_than_days <= 0) return 0;
 
     OAuthManager oauth(cfg_.gmail_oauth_file);
@@ -372,6 +382,30 @@ int SyncManager::purge(const ProgressCb& cb) {
 
     auto ids = gmail.listMessageIds(query,
         [&](int n) { if (cb) cb("purge_list", n, 0); });
+
+    if (ids.empty()) return 0;
+
+    // Filter to only embedded emails if requested
+    if (only_embedded && !ids.empty()) {
+        std::unordered_set<std::string> embedded_ids;
+        try {
+            pqxx::connection pg(cfg_.db.connString());
+            pqxx::work txn(pg);
+            auto r = txn.exec(
+                "SELECT gmail_id FROM emails WHERE embedding IS NOT NULL AND gmail_id IS NOT NULL");
+            for (const auto& row : r)
+                embedded_ids.insert(row[0].as<std::string>());
+            txn.commit();
+        } catch (const std::exception& e) {
+            std::cerr << "[SyncManager] purge DB lookup failed: " << e.what() << "\n";
+        }
+        std::vector<std::string> filtered;
+        filtered.reserve(ids.size());
+        for (const auto& id : ids)
+            if (embedded_ids.count(id)) filtered.push_back(id);
+        ids = std::move(filtered);
+        std::cerr << "[SyncManager] purge: " << ids.size() << " of eligible msgs are embedded\n";
+    }
 
     if (ids.empty()) return 0;
 
