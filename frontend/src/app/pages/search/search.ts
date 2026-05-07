@@ -75,23 +75,24 @@ import { SearchResult } from '../../models/email.model';
     .search-row { display: flex; gap: 12px; align-items: flex-start; }
     .search-field { flex: 1; }
     .mode-row { display: flex; align-items: center; gap: 16px; margin-top: -8px; }
-    .result-count { font-size: 13px; color: #888; }
+    .result-count { font-size: 13px; color: #ccc; }
     .loading-center { display: flex; justify-content: center; padding: 40px; }
     .error-msg { color: #f44336; padding: 16px; }
     .result-card {
       cursor: pointer;
-      transition: background 0.15s;
-      &:hover { background: #2a2a2a; }
+      transition: background 0.15s, border-color 0.15s;
+      border: 1px solid #3a3a3a !important;
+      &:hover { background: #272727; border-color: #ce93d8 !important; }
     }
-    .result-header { display: flex; justify-content: space-between; align-items: baseline; }
-    .result-subject { font-size: 15px; font-weight: 500; color: #e0e0e0; }
-    .result-date { font-size: 12px; color: #888; }
-    .result-from { font-size: 13px; color: #aaa; margin: 4px 0; }
-    .result-snippet { font-size: 13px; color: #999; line-height: 1.5; }
-    .result-meta { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 12px; color: #666; }
-    .attach-badge { display: flex; align-items: center; gap: 2px; }
-    .score { margin-left: auto; }
-    .empty-msg { text-align: center; color: #666; padding: 40px; font-size: 14px; }
+    .result-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .result-subject { font-size: 15px; font-weight: 600; color: #ffffff; flex: 1; }
+    .result-date { font-size: 12px; color: #bbb; white-space: nowrap; flex-shrink: 0; }
+    .result-from { font-size: 13px; color: #90caf9; margin: 6px 0 4px; }
+    .result-snippet { font-size: 13px; color: #ccc; line-height: 1.6; }
+    .result-meta { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 12px; color: #aaa; }
+    .attach-badge { display: flex; align-items: center; gap: 2px; color: #ce93d8; }
+    .score { margin-left: auto; color: #888; }
+    .empty-msg { text-align: center; color: #ccc; padding: 40px; font-size: 14px; }
   `]
 })
 export class SearchPage {

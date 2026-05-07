@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
 
     // 1. Config
     auto cfg = AppConfig::load(config_path);
-    std::cout << "[hms-gmail] Starting v1.0.0 on port " << cfg.port << "\n";
+    std::cout << "[hms-gmail] Starting v1.5.1 on port " << cfg.port << "\n";
 
     // 2. Database
     auto db = std::make_shared<Database>(cfg.db);
@@ -98,6 +98,12 @@ int main(int argc, char* argv[]) {
     std::signal(SIGTERM, [](int){ if (shutdown_fn) shutdown_fn(); });
 
     // 7. Drogon — serve Angular frontend from dist/browser
+    // SPA catch-all: any GET not matched by a controller returns index.html
+    // so Angular handles routing client-side (e.g. direct nav to /search)
+    auto spaResp = drogon::HttpResponse::newFileResponse(
+        "/etc/hms-gmail/frontend/index.html", "", drogon::CT_TEXT_HTML);
+    drogon::app().setCustom404Page(spaResp);
+
     drogon::app()
         .setLogLevel(trantor::Logger::kInfo)
         .addListener("0.0.0.0", cfg.port)

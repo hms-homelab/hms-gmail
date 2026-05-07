@@ -68,7 +68,7 @@ import { EmailDetail } from '../../models/email.model';
     .email-header { }
     .email-subject { font-size: 20px; font-weight: 500; margin-bottom: 12px; }
     .email-meta { font-size: 13px; color: #aaa; margin-bottom: 4px; }
-    .label { color: #777; margin-right: 4px; }
+    .label { color: #aaa; margin-right: 4px; }
     .body-text { white-space: pre-wrap; word-break: break-word; font-size: 13px; color: #ddd; margin: 0; font-family: monospace; }
     .body-html { padding: 8px; color: #ddd; font-size: 14px; overflow: auto; }
   `]

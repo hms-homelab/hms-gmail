@@ -5,9 +5,9 @@
 class BackupController : public drogon::HttpController<BackupController> {
 public:
     METHOD_LIST_BEGIN
-        ADD_METHOD_TO(BackupController::getStatus, "/backup/status", drogon::Get);
-        ADD_METHOD_TO(BackupController::postStart,  "/backup/start",  drogon::Post);
-        ADD_METHOD_TO(BackupController::postStop,   "/backup/stop",   drogon::Post);
+        ADD_METHOD_TO(BackupController::getStatus, "/api/backup/status", drogon::Get);
+        ADD_METHOD_TO(BackupController::postStart,  "/api/backup/start",  drogon::Post);
+        ADD_METHOD_TO(BackupController::postStop,   "/api/backup/stop",   drogon::Post);
     METHOD_LIST_END
 
     void getStatus(const drogon::HttpRequestPtr&,
