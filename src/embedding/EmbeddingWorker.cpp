@@ -128,6 +128,8 @@ std::vector<float> EmbeddingWorker::fetchEmbedding(const std::string& text) {
     Json::Value req;
     req["model"] = "nomic-embed-text";
     req["input"] = truncate(text);
+    // No keep_alive here: the batch host is the GPU box, and we want Ollama to
+    // free its VRAM on the default timer once a backfill finishes.
     Json::StreamWriterBuilder wb;
     wb["indentation"] = "";
     std::string body = Json::writeString(wb, req);

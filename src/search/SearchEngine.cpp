@@ -4,6 +4,7 @@
 #include <json/json.h>
 #include <algorithm>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <unordered_map>
 
@@ -34,13 +35,23 @@ std::string vecToLiteral(const std::vector<float>& v) {
     return ss.str();
 }
 
-pqxx::connection makeConn(const AppConfig& cfg) {
-    return pqxx::connection(
-        "host="     + cfg.db.host +
-        " port="    + std::to_string(cfg.db.port) +
-        " dbname="  + cfg.db.name +
-        " user="    + cfg.db.user +
-        " password="+ cfg.db.pass);
+std::string connString(const AppConfig& cfg) {
+    return "host="     + cfg.db.host +
+           " port="    + std::to_string(cfg.db.port) +
+           " dbname="  + cfg.db.name +
+           " user="    + cfg.db.user +
+           " password="+ cfg.db.pass;
+}
+
+// Reuse one Postgres connection per thread instead of opening a fresh one on
+// every query (search runs on Drogon's event-loop thread, so this is a small
+// connection pool). Reopened if it ever drops.
+pqxx::connection& getConn(const AppConfig& cfg) {
+    thread_local std::unique_ptr<pqxx::connection> conn;
+    if (!conn || !conn->is_open()) {
+        conn = std::make_unique<pqxx::connection>(connString(cfg));
+    }
+    return *conn;
 }
 
 SearchResult rowToResult(const pqxx::row& r, double score) {
@@ -66,10 +77,25 @@ std::vector<float> SearchEngine::embedQuery(const std::string& query) {
     CURL* curl = curl_easy_init();
     if (!curl) return {};
 
-    std::string url = cfg_.ollama_host + "/api/embed";
+    const std::string& host =
+        cfg_.query_ollama_host.empty() ? cfg_.ollama_host : cfg_.query_ollama_host;
+    std::string url = host + "/api/embed";
     Json::Value req;
     req["model"] = "nomic-embed-text";
     req["input"] = query.size() > 2000 ? query.substr(0, 2000) : query;
+    // keep_alive is a duration string ("1h") OR a number of seconds (negative =
+    // keep forever). Ollama rejects "-1" as a string, so send pure integers as
+    // a JSON number and everything else as a string.
+    try {
+        size_t pos = 0;
+        long ka = std::stol(cfg_.ollama_keep_alive, &pos);
+        if (pos == cfg_.ollama_keep_alive.size())
+            req["keep_alive"] = static_cast<Json::Int64>(ka);
+        else
+            req["keep_alive"] = cfg_.ollama_keep_alive;
+    } catch (...) {
+        req["keep_alive"] = cfg_.ollama_keep_alive;
+    }
     Json::StreamWriterBuilder wb;
     wb["indentation"] = "";
     std::string body = Json::writeString(wb, req);
@@ -113,17 +139,20 @@ std::vector<float> SearchEngine::embedQuery(const std::string& query) {
     return vec;
 }
 
-std::vector<SearchResult> SearchEngine::ftsSearch(const std::string& query, int limit) {
-    auto conn = makeConn(cfg_);
+std::vector<SearchResult> SearchEngine::ftsSearch(const std::string& query, int limit, int offset) {
+    auto& conn = getConn(cfg_);
     pqxx::work txn(conn);
+    // Only read the first 240 chars of body_text (enough for the snippet) so a
+    // broad match set doesn't de-TOAST full bodies across every candidate row.
     auto rows = txn.exec(
         "SELECT id, message_id, thread_id, from_addr, subject, "
-        "       to_char(date, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), body_text, has_attachment, "
+        "       to_char(date, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), left(body_text, 240), has_attachment, "
         "       ts_rank(search_vec, plainto_tsquery('english', " + txn.quote(query) + ")) AS rank "
         "FROM emails "
         "WHERE search_vec @@ plainto_tsquery('english', " + txn.quote(query) + ") "
         "ORDER BY rank DESC "
-        "LIMIT " + std::to_string(limit));
+        "LIMIT " + std::to_string(limit) +
+        " OFFSET " + std::to_string(offset));
     txn.commit();
 
     std::vector<SearchResult> results;
@@ -134,21 +163,22 @@ std::vector<SearchResult> SearchEngine::ftsSearch(const std::string& query, int 
     return results;
 }
 
-std::vector<SearchResult> SearchEngine::vectorSearch(const std::string& query, int limit) {
+std::vector<SearchResult> SearchEngine::vectorSearch(const std::string& query, int limit, int offset) {
     auto vec = embedQuery(query);
     if (vec.empty()) return {};
 
     std::string literal = vecToLiteral(vec);
-    auto conn = makeConn(cfg_);
+    auto& conn = getConn(cfg_);
     pqxx::work txn(conn);
     auto rows = txn.exec(
         "SELECT id, message_id, thread_id, from_addr, subject, "
-        "       to_char(date, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), body_text, has_attachment, "
+        "       to_char(date, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), left(body_text, 240), has_attachment, "
         "       1 - (embedding <=> '" + literal + "'::vector) AS score "
         "FROM emails "
         "WHERE embedding IS NOT NULL "
         "ORDER BY embedding <=> '" + literal + "'::vector "
-        "LIMIT " + std::to_string(limit));
+        "LIMIT " + std::to_string(limit) +
+        " OFFSET " + std::to_string(offset));
     txn.commit();
 
     std::vector<SearchResult> results;
@@ -159,12 +189,15 @@ std::vector<SearchResult> SearchEngine::vectorSearch(const std::string& query, i
     return results;
 }
 
-std::vector<SearchResult> SearchEngine::hybridSearch(const std::string& query, int limit) {
+std::vector<SearchResult> SearchEngine::hybridSearch(const std::string& query, int limit, int offset) {
     // RRF: score = 1/(k + rank), k=60
     const double k = 60.0;
 
-    auto fts_res = ftsSearch(query, limit * 2);
-    auto vec_res = vectorSearch(query, limit * 2);
+    // Rank a window large enough to cover the requested page, then slice it.
+    // Each side is fetched from rank 0 so the fused ordering is stable across pages.
+    const int window = (offset + limit) * 2;
+    auto fts_res = ftsSearch(query, window, 0);
+    auto vec_res = vectorSearch(query, window, 0);
 
     std::unordered_map<long, double> rrf;
     std::unordered_map<long, SearchResult> by_id;
@@ -184,7 +217,7 @@ std::vector<SearchResult> SearchEngine::hybridSearch(const std::string& query, i
 
     std::vector<SearchResult> results;
     results.reserve(std::min(limit, static_cast<int>(ranked.size())));
-    for (int i = 0; i < limit && i < static_cast<int>(ranked.size()); ++i) {
+    for (int i = offset; i < offset + limit && i < static_cast<int>(ranked.size()); ++i) {
         auto& res = by_id[ranked[i].first];
         res.score = ranked[i].second;
         results.push_back(res);
@@ -193,16 +226,16 @@ std::vector<SearchResult> SearchEngine::hybridSearch(const std::string& query, i
 }
 
 std::vector<SearchResult> SearchEngine::search(const std::string& query,
-                                                int limit, SearchMode mode) {
+                                                int limit, int offset, SearchMode mode) {
     switch (mode) {
-        case SearchMode::FTS:    return ftsSearch(query, limit);
-        case SearchMode::VECTOR: return vectorSearch(query, limit);
-        default:                 return hybridSearch(query, limit);
+        case SearchMode::FTS:    return ftsSearch(query, limit, offset);
+        case SearchMode::VECTOR: return vectorSearch(query, limit, offset);
+        default:                 return hybridSearch(query, limit, offset);
     }
 }
 
 EmailDetail SearchEngine::getEmail(long id) {
-    auto conn = makeConn(cfg_);
+    auto& conn = getConn(cfg_);
     pqxx::work txn(conn);
     auto rows = txn.exec(
         "SELECT id, message_id, thread_id, from_addr, to_addrs::text, cc::text, "
@@ -229,11 +262,11 @@ EmailDetail SearchEngine::getEmail(long id) {
 }
 
 std::vector<SearchResult> SearchEngine::getThread(const std::string& thread_id, int limit) {
-    auto conn = makeConn(cfg_);
+    auto& conn = getConn(cfg_);
     pqxx::work txn(conn);
     auto rows = txn.exec(
         "SELECT id, message_id, thread_id, from_addr, subject, "
-        "       to_char(date, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), body_text, has_attachment "
+        "       to_char(date, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), left(body_text, 240), has_attachment "
         "FROM emails WHERE thread_id = " + txn.quote(thread_id) +
         " ORDER BY date ASC LIMIT " + std::to_string(limit));
     txn.commit();

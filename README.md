@@ -105,7 +105,12 @@ gmail_oauth_file: /etc/hms-gmail/oauth.json
 gmail_batch_size: 100
 gmail_sync_query: ""          # empty = all mail, or e.g. "newer_than:2y"
 
-ollama_host: http://localhost:11434
+ollama_host: http://localhost:11434      # batch/backfill embedding host (point at a GPU box)
+# query_ollama_host: http://localhost:11434  # optional: separate host for query-time
+                                             # embedding (a CPU box); falls back to
+                                             # ollama_host when unset
+ollama_keep_alive: "1h"                  # keep nomic-embed-text warm on the query host
+                                         # ("30m", "-1" to pin forever)
 embedding_batch_size: 20
 
 mqtt:

@@ -7,10 +7,11 @@ import { SearchResponse, EmailDetail, ThreadResponse, BackupStatus } from '../mo
 export class GmailService {
   private http = inject(HttpClient);
 
-  search(query: string, limit = 20, mode = 'hybrid'): Observable<SearchResponse> {
+  search(query: string, limit = 20, mode = 'hybrid', offset = 0): Observable<SearchResponse> {
     const params = new HttpParams()
       .set('q', query)
       .set('limit', limit)
+      .set('offset', offset)
       .set('mode', mode);
     return this.http.get<SearchResponse>('/api/search', { params });
   }

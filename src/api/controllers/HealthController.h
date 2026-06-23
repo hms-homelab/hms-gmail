@@ -10,5 +10,5 @@ public:
     void health(const drogon::HttpRequestPtr& req,
                 std::function<void(const drogon::HttpResponsePtr&)>&& cb);
 
-    static std::string version() { return "1.0.0"; }
+    static std::string version() { return "1.6.0"; }
 };

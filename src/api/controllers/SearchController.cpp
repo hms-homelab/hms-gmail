@@ -57,23 +57,36 @@ void SearchController::search(const drogon::HttpRequestPtr& req,
         limit = std::max(1, std::min(limit, 100));
     }
 
+    int offset = 0;
+    auto off_str = req->getParameter("offset");
+    if (!off_str.empty()) {
+        try { offset = std::stoi(off_str); } catch (...) {}
+        offset = std::max(0, offset);
+    }
+
     SearchMode mode = SearchMode::HYBRID;
     auto mode_str = req->getParameter("mode");
     if (mode_str == "fts")         mode = SearchMode::FTS;
     else if (mode_str == "vector") mode = SearchMode::VECTOR;
 
     AppConfig cfg = *cfg_;
-    drogon::app().getLoop()->runInLoop([cfg, query, limit, mode, cb = std::move(cb)]() mutable {
+    drogon::app().getLoop()->runInLoop([cfg, query, limit, offset, mode, cb = std::move(cb)]() mutable {
         try {
             SearchEngine engine(cfg);
-            auto results = engine.search(query, limit, mode);
+            // Fetch one extra row to tell whether another page exists, without a COUNT.
+            auto results = engine.search(query, limit + 1, offset, mode);
+            bool has_more = static_cast<int>(results.size()) > limit;
+            if (has_more) results.resize(limit);
             Json::Value arr(Json::arrayValue);
             for (const auto& r : results)
                 arr.append(resultToJson(r));
             Json::Value body;
-            body["results"] = arr;
-            body["count"]   = static_cast<int>(results.size());
-            body["query"]   = query;
+            body["results"]  = arr;
+            body["count"]    = static_cast<int>(results.size());
+            body["query"]    = query;
+            body["limit"]    = limit;
+            body["offset"]   = offset;
+            body["has_more"] = has_more;
             cb(jsonResp(body));
         } catch (const std::exception& e) {
             cb(errorResp(e.what(), drogon::k500InternalServerError));

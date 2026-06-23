@@ -29,7 +29,17 @@ struct AppConfig {
     int         embedding_batch_size   = 20;
     int         embedding_concurrency  = 1;
     int         embedding_max_attempts = 10;
+    // Batch/backfill embedding host (EmbeddingWorker). Point at the GPU box.
     std::string ollama_host           = "http://localhost:11434";
+    // Query-time embedding host (SearchEngine). Falls back to ollama_host when
+    // empty. Point at a CPU box so latency-sensitive searches don't compete for
+    // the GPU, and keep the model prewarmed there via ollama_keep_alive.
+    std::string query_ollama_host     = "";
+    // How long the query host keeps nomic-embed-text resident after a request,
+    // so searches don't pay a cold model load. Ollama duration ("1h", "30m") or
+    // "-1" to pin forever. Only applied to the query host (a CPU box), never the
+    // GPU backfill host, so the GPU isn't held hostage between syncs.
+    std::string ollama_keep_alive     = "1h";
 
     // v1.5: direct Gmail API (replaces gyb)
     std::string gmail_oauth_file      = "/etc/hms-gmail/oauth.json";

@@ -69,6 +69,13 @@ import { SearchResult } from '../../models/email.model';
       <div *ngIf="!loading() && searched && results().length === 0" class="empty-msg">
         No results found.
       </div>
+
+      <div *ngIf="hasMore() && results().length > 0" class="load-more-row">
+        <button mat-stroked-button (click)="loadMore()" [disabled]="loadingMore()">
+          <mat-spinner *ngIf="loadingMore()" diameter="18"></mat-spinner>
+          <span *ngIf="!loadingMore()">Load more</span>
+        </button>
+      </div>
     </div>
   `,
   styles: [`
@@ -93,32 +100,58 @@ import { SearchResult } from '../../models/email.model';
     .attach-badge { display: flex; align-items: center; gap: 2px; color: #ce93d8; }
     .score { margin-left: auto; color: #888; }
     .empty-msg { text-align: center; color: #ccc; padding: 40px; font-size: 14px; }
+    .load-more-row { display: flex; justify-content: center; padding: 8px 0 32px; }
+    .load-more-row button mat-spinner { display: inline-block; }
   `]
 })
 export class SearchPage {
   private router = inject(Router);
   private gmail = inject(GmailService);
 
+  private readonly pageSize = 20;
+
   query = '';
   mode = 'hybrid';
   results = signal<SearchResult[]>([]);
   loading = signal(false);
+  loadingMore = signal(false);
+  hasMore = signal(false);
   error = signal('');
   searched = false;
+  private offset = 0;
+  private activeQuery = '';
 
   doSearch() {
     if (!this.query.trim()) return;
+    this.activeQuery = this.query.trim();
+    this.offset = 0;
+    this.results.set([]);
+    this.hasMore.set(false);
     this.loading.set(true);
     this.error.set('');
     this.searched = true;
-    this.gmail.search(this.query.trim(), 20, this.mode).subscribe({
+    this.fetchPage(false);
+  }
+
+  loadMore() {
+    if (this.loadingMore() || !this.hasMore()) return;
+    this.loadingMore.set(true);
+    this.fetchPage(true);
+  }
+
+  private fetchPage(append: boolean) {
+    this.gmail.search(this.activeQuery, this.pageSize, this.mode, this.offset).subscribe({
       next: (res) => {
-        this.results.set(res.results);
+        this.results.set(append ? [...this.results(), ...res.results] : res.results);
+        this.offset += res.results.length;
+        this.hasMore.set(res.has_more);
         this.loading.set(false);
+        this.loadingMore.set(false);
       },
       error: (err) => {
         this.error.set(err.message || 'Search failed');
         this.loading.set(false);
+        this.loadingMore.set(false);
       }
     });
   }

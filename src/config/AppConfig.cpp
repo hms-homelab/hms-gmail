@@ -13,6 +13,8 @@ AppConfig AppConfig::load(const std::string& path) {
         if (y["schedule_cron"])         cfg.schedule_cron         = y["schedule_cron"].as<std::string>();
         if (y["embedding_batch_size"])  cfg.embedding_batch_size  = y["embedding_batch_size"].as<int>();
         if (y["ollama_host"])           cfg.ollama_host           = y["ollama_host"].as<std::string>();
+        if (y["query_ollama_host"])     cfg.query_ollama_host     = y["query_ollama_host"].as<std::string>();
+        if (y["ollama_keep_alive"])     cfg.ollama_keep_alive     = y["ollama_keep_alive"].as<std::string>();
         if (y["gmail_oauth_file"])      cfg.gmail_oauth_file      = y["gmail_oauth_file"].as<std::string>();
         if (y["gmail_sync_query"])      cfg.gmail_sync_query      = y["gmail_sync_query"].as<std::string>();
         if (y["gmail_batch_size"])      cfg.gmail_batch_size      = y["gmail_batch_size"].as<int>();
@@ -45,7 +47,9 @@ void AppConfig::applyEnvFallbacks() {
     if (auto v = std::getenv("HMS_GMAIL_PORT"))        port        = std::stoi(v);
     if (auto v = std::getenv("HMS_GMAIL_EMAIL"))       email       = v;
     if (auto v = std::getenv("HMS_GMAIL_BACKUP_DIR"))  backup_dir  = v;
-    if (auto v = std::getenv("HMS_GMAIL_OLLAMA_HOST")) ollama_host = v;
+    if (auto v = std::getenv("HMS_GMAIL_OLLAMA_HOST"))         ollama_host       = v;
+    if (auto v = std::getenv("HMS_GMAIL_QUERY_OLLAMA_HOST"))   query_ollama_host = v;
+    if (auto v = std::getenv("HMS_GMAIL_OLLAMA_KEEP_ALIVE"))   ollama_keep_alive = v;
     if (auto v = std::getenv("MQTT_HOST"))             mqtt.host   = v;
     if (auto v = std::getenv("MQTT_USER"))             mqtt.user   = v;
     if (auto v = std::getenv("MQTT_PASS"))             mqtt.pass   = v;

@@ -14,6 +14,9 @@ export interface SearchResponse {
   results: SearchResult[];
   count: number;
   query: string;
+  limit: number;
+  offset: number;
+  has_more: boolean;
 }
 
 export interface EmailDetail {

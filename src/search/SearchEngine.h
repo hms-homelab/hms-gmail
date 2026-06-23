@@ -38,6 +38,7 @@ public:
 
     std::vector<SearchResult> search(const std::string& query,
                                      int limit = 20,
+                                     int offset = 0,
                                      SearchMode mode = SearchMode::HYBRID);
 
     EmailDetail         getEmail(long id);
@@ -45,9 +46,9 @@ public:
 
 private:
     std::vector<float>        embedQuery(const std::string& query);
-    std::vector<SearchResult> ftsSearch(const std::string& query, int limit);
-    std::vector<SearchResult> vectorSearch(const std::string& query, int limit);
-    std::vector<SearchResult> hybridSearch(const std::string& query, int limit);
+    std::vector<SearchResult> ftsSearch(const std::string& query, int limit, int offset);
+    std::vector<SearchResult> vectorSearch(const std::string& query, int limit, int offset);
+    std::vector<SearchResult> hybridSearch(const std::string& query, int limit, int offset);
 
     AppConfig cfg_;
 };

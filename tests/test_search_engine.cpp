@@ -20,7 +20,7 @@ TEST(SearchEngine, ConstructsWithConfig) {
 
 TEST(SearchEngine, FtsSearchThrowsOnBadConnection) {
     SearchEngine engine(badDbCfg());
-    EXPECT_THROW(engine.search("test", 5, SearchMode::FTS), std::exception);
+    EXPECT_THROW(engine.search("test", 5, 0, SearchMode::FTS), std::exception);
 }
 
 TEST(SearchEngine, GetEmailThrowsOnBadConnection) {
@@ -41,7 +41,7 @@ TEST(SearchEngine, VectorSearchWithNoOllamaReturnsEmpty) {
     SearchEngine engine(cfg);
     // embedQuery fails → returns {} → vectorSearch returns {} (no throw)
     EXPECT_NO_THROW({
-        auto results = engine.search("test query", 5, SearchMode::VECTOR);
+        auto results = engine.search("test query", 5, 0, SearchMode::VECTOR);
         EXPECT_TRUE(results.empty());
     });
 }
@@ -49,5 +49,5 @@ TEST(SearchEngine, VectorSearchWithNoOllamaReturnsEmpty) {
 TEST(SearchEngine, HybridSearchWithNoOllamaFallsBackToFts) {
     // Hybrid = FTS + vector RRF. With bad DB, FTS will throw.
     SearchEngine engine(badDbCfg());
-    EXPECT_THROW(engine.search("test", 5, SearchMode::HYBRID), std::exception);
+    EXPECT_THROW(engine.search("test", 5, 0, SearchMode::HYBRID), std::exception);
 }

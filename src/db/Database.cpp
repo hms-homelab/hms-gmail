@@ -48,6 +48,13 @@ void Database::ensureSchema() {
     txn.exec("CREATE INDEX IF NOT EXISTS emails_from_idx ON emails(from_addr)");
     txn.exec("CREATE INDEX IF NOT EXISTS emails_thread_idx ON emails(thread_id)");
 
+    // Approximate-NN index for semantic/hybrid search. Without this, every
+    // vector query is a full sequential scan computing 768-dim cosine distance
+    // per row. HNSW (pgvector >= 0.5) gives the best recall/latency; the query
+    // uses the <=> cosine-distance operator, so the ops class must match.
+    txn.exec("CREATE INDEX IF NOT EXISTS emails_embedding_idx "
+             "ON emails USING hnsw (embedding vector_cosine_ops)");
+
     txn.exec(R"(
         CREATE TABLE IF NOT EXISTS email_attachments (
             id         BIGSERIAL PRIMARY KEY,
