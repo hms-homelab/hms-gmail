@@ -11,7 +11,7 @@ option(BUILD_TESTS "Build unit tests" ON)
 include(FetchContent)
 FetchContent_Declare(hms_shared
     GIT_REPOSITORY https://github.com/hms-homelab/hms-shared.git
-    GIT_TAG        v1.6.6
+    GIT_TAG        v1.6.18
 )
 FetchContent_Populate(hms_shared)
 

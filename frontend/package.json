@@ -1,6 +1,6 @@
 {
   "name": "hms-gmail-frontend",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "scripts": {
     "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build --configuration production",
