@@ -13,7 +13,7 @@ TEST(EmbeddingWorker, ConstructsWithConfig) {
     cfg.db.port = 5432;
     cfg.db.name = "gmail";
     cfg.db.user = "maestro";
-    cfg.db.pass = "REDACTED";
+    cfg.db.pass = "not-a-real-password";   // construction only; nothing connects
     // Just verify it constructs without throwing
     EXPECT_NO_THROW(EmbeddingWorker worker(cfg));
 }
